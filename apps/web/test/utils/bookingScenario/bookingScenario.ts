@@ -23,7 +23,7 @@ import type {
   WorkflowTriggerEvents,
   WorkflowMethods,
 } from "@calcom/prisma/client";
-import type { SchedulingType, SMSLockState, TimeUnit } from "@calcom/prisma/enums";
+import type { SchedulingType, SmsCreditAllocationType, SMSLockState, TimeUnit } from "@calcom/prisma/enums";
 import type { BookingStatus } from "@calcom/prisma/enums";
 import type { teamMetadataSchema } from "@calcom/prisma/zod-utils";
 import type { userMetadataType } from "@calcom/prisma/zod-utils";
@@ -120,6 +120,9 @@ type InputUser = Omit<typeof TestData.users.example, "defaultScheduleId"> & {
       slug: string;
       parentId?: number;
       isPrivate?: boolean;
+      smsCreditAllocationType?: SmsCreditAllocationType;
+      smsCreditAllocationValue?: number;
+      smsCreditCount?: Prisma.SmsCreditCountCreateInput & { userId?: number | null };
     };
   }[];
   schedules: {
@@ -632,7 +635,7 @@ export async function addTeamsToDb(teams: NonNullable<InputUser["teams"]>[number
       ...team,
       parentId: team.parentId,
     };
-    await prismock.team.upsert({
+    const createdTeam = await prismock.team.upsert({
       where: {
         id: teamsWithParentId.id,
       },
@@ -643,6 +646,18 @@ export async function addTeamsToDb(teams: NonNullable<InputUser["teams"]>[number
         ...teamsWithParentId,
       },
     });
+
+    if (team.smsCreditCount) {
+      await prismock.smsCreditCount.create({
+        data: {
+          userId: team.smsCreditCount.userId,
+          month: team.smsCreditCount.month,
+          credits: team.smsCreditCount.credits,
+          limitReached: team.smsCreditCount.limitReached,
+          teamId: createdTeam.id,
+        },
+      });
+    }
   }
 
   const addedTeams = await prismock.team.findMany({

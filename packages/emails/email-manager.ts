@@ -71,6 +71,8 @@ import OrganizerRequestedToRescheduleEmail from "./templates/organizer-requested
 import OrganizerRescheduledEmail from "./templates/organizer-rescheduled-email";
 import OrganizerScheduledEmail from "./templates/organizer-scheduled-email";
 import SlugReplacementEmail from "./templates/slug-replacement-email";
+import SmsLimitAlmostReachedEmail from "./templates/sms-limit-almost-reached-email";
+import SmsLimitReachedEmail from "./templates/sms-limit-reached-email";
 import type { TeamInvite } from "./templates/team-invite-email";
 import TeamInviteEmail from "./templates/team-invite-email";
 
@@ -695,4 +697,71 @@ export const sendAdminOrganizationNotification = async (input: OrganizationNotif
 
 export const sendBookingRedirectNotification = async (bookingRedirect: IBookingRedirect) => {
   await sendEmail(() => new BookingRedirectEmailNotification(bookingRedirect));
+};
+
+export const sendSmsLimitAlmostReachedEmails = async ({
+  team,
+  user,
+}: {
+  team?: {
+    id: number;
+    name: string;
+    ownersAndAdmins: {
+      email: string;
+      name: string | null;
+      t: TFunction;
+    }[];
+  };
+  user?: {
+    email: string;
+    name: string;
+    t: TFunction;
+  };
+}) => {
+  const emailsToSend: Promise<unknown>[] = [];
+
+  if (team) {
+    emailsToSend.push(
+      ...team.ownersAndAdmins.map((owner) => {
+        return sendEmail(() => new SmsLimitAlmostReachedEmail({ team, user: owner }));
+      })
+    );
+  } else if (user) {
+    emailsToSend.push(sendEmail(() => new SmsLimitAlmostReachedEmail({ user })));
+  }
+
+  await Promise.all(emailsToSend);
+};
+
+export const sendSmsLimitReachedEmails = async ({
+  team,
+  user,
+}: {
+  team?: {
+    id: number;
+    name: string;
+    ownersAndAdmins: {
+      email: string;
+      name: string | null;
+      t: TFunction;
+    }[];
+  };
+  user?: {
+    email: string;
+    name: string;
+    t: TFunction;
+  };
+}) => {
+  const emailsToSend: Promise<unknown>[] = [];
+
+  if (team) {
+    emailsToSend.push(
+      ...team.ownersAndAdmins.map((owner) => {
+        return sendEmail(() => new SmsLimitReachedEmail({ team, user: owner }));
+      })
+    );
+  } else if (user) {
+    emailsToSend.push(sendEmail(() => new SmsLimitReachedEmail({ user })));
+  }
+  await Promise.all(emailsToSend);
 };

@@ -64,6 +64,9 @@ export const updateHandler = async ({ ctx, input }: UpdateOptions) => {
     brandColor: input.brandColor,
     darkBrandColor: input.darkBrandColor,
     theme: input.theme,
+    smsCreditAllocationType: input.smsCreditAllocationType,
+    smsCreditAllocationValue: input.smsCreditAllocationValue,
+    smsOverageLimit: input.smsOverageLimit,
     bookingLimits: input.bookingLimits ?? undefined,
   };
 

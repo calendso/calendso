@@ -1,5 +1,7 @@
+import dayjs from "@calcom/dayjs";
 import { markdownToSafeHTML } from "@calcom/lib/markdownToSafeHTML";
 import { getTeamWithMembers } from "@calcom/lib/server/queries/teams";
+import type { PrismaClient } from "@calcom/prisma";
 import { MembershipRole } from "@calcom/prisma/enums";
 
 import { TRPCError } from "@trpc/server";
@@ -10,6 +12,7 @@ import type { TGetInputSchema } from "./get.schema";
 type GetOptions = {
   ctx: {
     user: NonNullable<TrpcSessionUser>;
+    prisma: PrismaClient;
   };
   input: TGetInputSchema;
 };
@@ -54,9 +57,35 @@ export const getHandler = async ({ ctx, input }: GetOptions) => {
     return false;
   }
 
+  const smsCreditCount = await ctx.prisma.smsCreditCount.findFirst({
+    where: {
+      teamId: input.teamId,
+      userId: null,
+      month: dayjs().utc().startOf("month").toDate(),
+    },
+  });
+  const membersWithUsedCredits = await Promise.all(
+    members.map(async (member) => {
+      const smsCreditCount = await ctx.prisma.smsCreditCount.findFirst({
+        where: {
+          teamId: input.teamId,
+          userId: member.id,
+          month: dayjs().utc().startOf("month").toDate(),
+        },
+      });
+
+      return {
+        ...member,
+        smsCreditsUsed: smsCreditCount?.credits ?? 0,
+      };
+    })
+  );
+
   return {
     ...restTeam,
-    members: shouldHideMembers() ? [] : members,
+    smsCreditsUsed: smsCreditCount?.credits ?? 0,
+    smsLimitReached: smsCreditCount?.limitReached,
+    members: shouldHideMembers() ? [] : membersWithUsedCredits,
     safeBio: markdownToSafeHTML(team.bio),
     membership: {
       role: membership.role,

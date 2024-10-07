@@ -92,6 +92,9 @@ export async function getTeamWithMembers(args: {
       hideBookATeamMember: true,
       isPrivate: true,
       metadata: true,
+      smsCreditAllocationType: true,
+      smsCreditAllocationValue: true,
+      smsOverageLimit: true,
       parent: {
         select: {
           id: true,
@@ -236,7 +239,6 @@ export async function getTeamWithMembers(args: {
 
   // Don't leak invite tokens to the frontend
   const { inviteTokens, ...teamWithoutInviteTokens } = teamOrOrg;
-
   // Don't leak stripe payment ids
   const teamMetadata = teamOrOrg.metadata;
   const {

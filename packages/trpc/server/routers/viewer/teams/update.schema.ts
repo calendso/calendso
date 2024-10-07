@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { resizeBase64Image } from "@calcom/lib/server/resizeBase64Image";
 import slugify from "@calcom/lib/slugify";
+import { SmsCreditAllocationType } from "@calcom/prisma/enums";
 import { intervalLimitsType } from "@calcom/prisma/zod-utils";
 
 export const ZUpdateInputSchema = z.object({
@@ -23,6 +24,11 @@ export const ZUpdateInputSchema = z.object({
   brandColor: z.string().optional(),
   darkBrandColor: z.string().optional(),
   theme: z.string().optional().nullable(),
+  smsCreditAllocationType: z
+    .enum([SmsCreditAllocationType.ALL, SmsCreditAllocationType.NONE, SmsCreditAllocationType.SPECIFIC])
+    .optional(),
+  smsCreditAllocationValue: z.number().optional(),
+  smsOverageLimit: z.number().optional(),
   bookingLimits: intervalLimitsType.optional(),
 });
 

@@ -695,6 +695,7 @@ export async function scheduleBookingReminders(
           sender: step.sender,
           userId: userId,
           teamId: teamId,
+          teamIdToCharge: 0, //todo
         });
       } else if (step.action === WorkflowActions.WHATSAPP_NUMBER && step.sendTo) {
         await scheduleWhatsappReminder({
@@ -711,6 +712,7 @@ export async function scheduleBookingReminders(
           template: step.template,
           userId: userId,
           teamId: teamId,
+          teamIdToCharge: 0, //todo
         });
       }
     });

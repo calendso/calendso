@@ -7,11 +7,21 @@ import { setTestSMS } from "@calcom/lib/testSMS";
 import prisma from "@calcom/prisma";
 import { SMSLockState } from "@calcom/prisma/enums";
 
+import type { TeamOrUserId } from "../smsReminderManager";
+
 const log = logger.getSubLogger({ prefix: ["[twilioProvider]"] });
 
 const testMode = process.env.NEXT_PUBLIC_IS_E2E || process.env.INTEGRATION_TEST_MODE;
 
-function createTwilioClient() {
+export async function getCountryCode(phoneNumber: string) {
+  const twilio = createTwilioClient();
+
+  const numberDetails = await twilio.lookups.phoneNumbers(phoneNumber).fetch();
+
+  return numberDetails.countryCode;
+}
+
+export function createTwilioClient() {
   if (process.env.TWILIO_SID && process.env.TWILIO_TOKEN && process.env.TWILIO_MESSAGING_SID) {
     return TwilioClient(process.env.TWILIO_SID, process.env.TWILIO_TOKEN);
   }
@@ -30,14 +40,17 @@ function getSMSNumber(phone: string, whatsapp = false) {
   return whatsapp ? `whatsapp:${phone}` : phone;
 }
 
-export const sendSMS = async (
-  phoneNumber: string,
-  body: string,
-  sender: string,
-  userId?: number | null,
-  teamId?: number | null,
-  whatsapp = false
-) => {
+export const sendSMS = async (params: {
+  phoneNumber: string;
+  body: string;
+  sender: string;
+  teamOrUserToCharge: TeamOrUserId;
+  userId?: number | null;
+  teamId?: number | null; // teamId of workflow
+  whatsapp?: boolean;
+}) => {
+  const { phoneNumber, body, sender, userId, teamId, whatsapp = false, teamOrUserToCharge } = params;
+
   log.silly("sendSMS", JSON.stringify({ phoneNumber, body, sender, userId, teamId }));
 
   const isSMSSendingLocked = await isLockedForSMSSending(userId, teamId);
@@ -74,9 +87,9 @@ export const sendSMS = async (
     messagingServiceSid: process.env.TWILIO_MESSAGING_SID,
     to: getSMSNumber(phoneNumber, whatsapp),
     from: whatsapp ? getDefaultSender(whatsapp) : sender ? sender : getDefaultSender(),
+    statusCallback: `${process.env.NEXT_PUBLIC_WEBAPP_URL}/api/twilio/statusCallback?teamId=teamId&userId=userId&userIdToCharge=${teamOrUserToCharge.userId}&teamToCharge=${teamOrUserToCharge.teamId}`,
   });
-
-  return response;
+  return { ...response };
 };
 
 export const scheduleSMS = async (
@@ -123,12 +136,18 @@ export const scheduleSMS = async (
     scheduleType: "fixed",
     sendAt: scheduledDate,
     from: whatsapp ? getDefaultSender(whatsapp) : sender ? sender : getDefaultSender(),
+    statusCallback: `${process.env.NEXT_PUBLIC_WEBAPP_URL}/api/twilio/statusCallback?userId=${userId}&teamId=${teamId}`,
   });
-
   return response;
 };
 
 export const cancelSMS = async (referenceId: string) => {
+  if (testMode) {
+    console.log(
+      "Skipped canceling SMS because process.env.NEXT_PUBLIC_IS_E2E or process.env.INTEGRATION_TEST_MODE is set"
+    );
+    return;
+  }
   const twilio = createTwilioClient();
   await twilio.messages(referenceId).update({ status: "canceled" });
 };

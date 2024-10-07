@@ -76,7 +76,7 @@ function getiCalEventAsString(evt: BookingInfo, status?: ParticipationStatus) {
   return icsEvent.value;
 }
 
-type ScheduleEmailReminderAction = Extract<
+export type ScheduleEmailReminderAction = Extract<
   WorkflowActions,
   "EMAIL_HOST" | "EMAIL_ATTENDEE" | "EMAIL_ADDRESS"
 >;
@@ -391,7 +391,6 @@ export const deleteScheduledEmailReminder = async (reminderId: number, reference
           id: reminderId,
         },
       });
-
       return;
     }
 

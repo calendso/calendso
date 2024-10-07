@@ -323,6 +323,7 @@ export const activateEventTypeHandler = async ({ ctx, input }: ActivateEventType
             sender: step.sender,
             userId: booking.userId,
             teamId: eventTypeWorkflow.teamId,
+            teamIdToCharge: 0, //todo
           });
         } else if (step.action === WorkflowActions.WHATSAPP_NUMBER && step.sendTo) {
           await scheduleWhatsappReminder({
@@ -339,6 +340,7 @@ export const activateEventTypeHandler = async ({ ctx, input }: ActivateEventType
             template: step.template,
             userId: booking.userId,
             teamId: eventTypeWorkflow.teamId,
+            teamIdToCharge: 0, //todo
           });
         }
       }

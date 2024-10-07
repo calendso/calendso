@@ -551,7 +551,7 @@ export const roundRobinReassignment = async ({
       calendarEvent: {
         ...evt,
         metadata: workflowEventMetadata,
-        eventType: { slug: eventType.slug },
+        eventType: { slug: eventType.slug, parent: eventType.parent },
         bookerUrl,
       },
       hideBranding: !!eventType?.owner?.hideBranding,

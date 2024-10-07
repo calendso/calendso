@@ -63,10 +63,21 @@ export type ScheduleTextReminderAction = Extract<
   WorkflowActions,
   "SMS_ATTENDEE" | "SMS_NUMBER" | "WHATSAPP_ATTENDEE" | "WHATSAPP_NUMBER"
 >;
+
+export type TeamOrUserId =
+  | {
+      userId: number;
+      teamId?: never;
+    }
+  | {
+      teamId: number;
+      userId?: never;
+    };
 export interface ScheduleTextReminderArgs extends ScheduleReminderArgs {
   reminderPhone: string | null;
   message: string;
   action: ScheduleTextReminderAction;
+  teamOrUserToCharge: TeamOrUserId;
   userId?: number | null;
   teamId?: number | null;
   isVerificationPending?: boolean;
@@ -88,6 +99,7 @@ export const scheduleSMSReminder = async (args: ScheduleTextReminderArgs) => {
     teamId,
     isVerificationPending = false,
     seatReferenceUid,
+    teamOrUserToCharge,
   } = args;
 
   const { startTime, endTime } = evt;
@@ -188,7 +200,14 @@ export const scheduleSMSReminder = async (args: ScheduleTextReminderArgs) => {
       triggerEvent === WorkflowTriggerEvents.RESCHEDULE_EVENT
     ) {
       try {
-        await twilio.sendSMS(reminderPhone, smsMessage, senderID, userId, teamId);
+        await twilio.sendSMS({
+          phoneNumber: reminderPhone,
+          body: smsMessage,
+          sender: senderID,
+          teamOrUserToCharge,
+          userId,
+          teamId,
+        });
       } catch (error) {
         log.error(`Error sending SMS with error ${error}`);
       }
@@ -197,9 +216,9 @@ export const scheduleSMSReminder = async (args: ScheduleTextReminderArgs) => {
         triggerEvent === WorkflowTriggerEvents.AFTER_EVENT) &&
       scheduledDate
     ) {
-      // Can only schedule at least 60 minutes in advance and at most 7 days in advance
+      // Can only schedule at least 15 minutes in advance and at most 7 days in advance
       if (
-        currentDate.isBefore(scheduledDate.subtract(1, "hour")) &&
+        currentDate.isBefore(scheduledDate.subtract(15, "minute")) &&
         !scheduledDate.isAfter(currentDate.add(7, "day"))
       ) {
         try {

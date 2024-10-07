@@ -34,6 +34,7 @@ export const scheduleWhatsappReminder = async (args: ScheduleTextReminderArgs) =
     teamId,
     isVerificationPending = false,
     seatReferenceUid,
+    teamOrUserToCharge,
   } = args;
 
   const { startTime, endTime } = evt;
@@ -148,7 +149,14 @@ export const scheduleWhatsappReminder = async (args: ScheduleTextReminderArgs) =
       triggerEvent === WorkflowTriggerEvents.RESCHEDULE_EVENT
     ) {
       try {
-        await twilio.sendSMS(reminderPhone, textMessage, "", userId, teamId, true);
+        await twilio.sendSMS({
+          phoneNumber: reminderPhone,
+          body: textMessage,
+          sender: "",
+          userId,
+          teamId,
+          teamOrUserToCharge,
+        }); //todo: find teamIdToCharge
       } catch (error) {
         console.log(`Error sending WHATSAPP with error ${error}`);
       }
@@ -157,9 +165,9 @@ export const scheduleWhatsappReminder = async (args: ScheduleTextReminderArgs) =
         triggerEvent === WorkflowTriggerEvents.AFTER_EVENT) &&
       scheduledDate
     ) {
-      // Can only schedule at least 60 minutes in advance and at most 7 days in advance
+      // Can only schedule at least 15 minutes in advance and at most 7 days in advance
       if (
-        currentDate.isBefore(scheduledDate.subtract(1, "hour")) &&
+        currentDate.isBefore(scheduledDate.subtract(15, "minute")) &&
         !scheduledDate.isAfter(currentDate.add(7, "day"))
       ) {
         try {
