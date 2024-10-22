@@ -399,6 +399,45 @@ export function getUsersWithCredentialsConsideringContactOwner({
   return contactOwnerAndFixedHosts;
 }
 
+function getUsersWithCredentials({
+  skipContactOwner,
+  contactOwnerEmail,
+  hosts,
+}: {
+  skipContactOwner: boolean | null | undefined;
+  contactOwnerEmail: string | null | undefined;
+  hosts: {
+    isFixed?: boolean;
+    user: GetAvailabilityUser;
+  }[];
+}) {
+  const contactOwnerHost = hosts.find((host) => host.user.email === contactOwnerEmail);
+  /**
+   * It could still have contact owner, if it was one of the assigned hosts of the event.
+   * In case of routedTeamMemberIds, hosts will only have the Routed Team Members and in that case, contact owner would be here only if it matches
+   */
+  let hostsWithoutExplicitContactOwner = hosts.map(({ isFixed, user }) => ({ isFixed, ...user }));
+
+  if (skipContactOwner) {
+    return hostsWithoutExplicitContactOwner;
+  }
+
+  let contactOwnerExists = contactOwnerEmail && contactOwnerHost;
+
+  if (!contactOwnerExists || contactOwnerHost?.isFixed) {
+    return hostsWithoutExplicitContactOwner;
+  }
+
+  const hostsWithExplicitContactOwner = hosts.reduce((usersArray, host) => {
+    if (host.isFixed || host.user.email === contactOwnerEmail)
+      usersArray.push({ ...host.user, isFixed: host.isFixed });
+
+    return usersArray;
+  }, [] as (GetAvailabilityUser & { isFixed?: boolean })[]);
+
+  return hostsWithExplicitContactOwner;
+}
+
 export async function getAvailableSlots({ input, ctx }: GetScheduleOptions): Promise<IGetAvailableSlots> {
   const { _enableTroubleshooter: enableTroubleshooter = false } = input;
   const orgDetails = input?.orgSlug

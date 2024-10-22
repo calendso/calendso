@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from "uuid";
 
 import dayjs from "@calcom/dayjs";
 import { getRoutedTeamMemberIdsFromSearchParams } from "@calcom/lib/bookings/getRoutedTeamMemberIdsFromSearchParams";
+import { fromEntriesWithDuplicateKeys } from "@calcom/lib/fromEntriesWithDuplicateKeys";
 import { parseRecurringDates } from "@calcom/lib/parse-dates";
 
 import type { BookerEvent, BookingCreateBody, RecurringBookingCreateBody } from "../../types";
@@ -25,6 +26,27 @@ export type BookingOptions = {
   orgSlug?: string;
 };
 
+function getRoutingFormResponsesFromSearchParams(searchParams: URLSearchParams) {
+  const allSearchParams = fromEntriesWithDuplicateKeys(searchParams.entries());
+
+  function onlyRoutingFormResponses([key, _value]: [string, string | string[]]) {
+    // Routing Form responses are currently passed without cal. prefix
+    if (key.startsWith("cal.")) {
+      return false;
+    }
+    const queryParamsUsedByBookingForm = ["date", "month", "slot"];
+    return !queryParamsUsedByBookingForm.includes(key);
+  }
+
+  const routingFormResponsesWithOnlyStringValues = Object.fromEntries(
+    Object.entries(allSearchParams)
+      .filter(onlyRoutingFormResponses)
+      .map(([key, value]) => [key, Array.isArray(value) ? value.join(",") : value])
+  );
+
+  return routingFormResponsesWithOnlyStringValues;
+}
+
 export const mapBookingToMutationInput = ({
   values,
   event,
@@ -47,6 +69,7 @@ export const mapBookingToMutationInput = ({
   const routingFormResponseIdParam = searchParams.get("cal.routingFormResponseId");
   const routingFormResponseId = routingFormResponseIdParam ? Number(routingFormResponseIdParam) : undefined;
   const skipContactOwner = searchParams.get("cal.skipContactOwner") === "true";
+  const routingFormResponses = getRoutingFormResponsesFromSearchParams(searchParams);
   const reroutingFormResponses = searchParams.get("cal.reroutingFormResponses");
   return {
     ...values,
@@ -72,6 +95,8 @@ export const mapBookingToMutationInput = ({
     routedTeamMemberIds,
     routingFormResponseId,
     skipContactOwner,
+    // TODO: We can retrieve it in handleNewBooking from routingFormResponseId. But it needs some transformation first, so let's do it later
+    routingFormResponses,
     // In case of rerouting, the form responses are actually the responses that we need to update.
     reroutingFormResponses: reroutingFormResponses ? JSON.parse(reroutingFormResponses) : undefined,
   };

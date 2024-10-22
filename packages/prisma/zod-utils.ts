@@ -253,6 +253,7 @@ export const bookingCreateBodySchema = z.object({
   routedTeamMemberIds: z.array(z.number()).nullish(),
   routingFormResponseId: z.number().optional(),
   skipContactOwner: z.boolean().optional(),
+  routingFormResponses: z.record(z.string()).nullish(),
 
   /**
    * Holds the corrected responses of the Form for a booking, provided during rerouting
