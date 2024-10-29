@@ -36,7 +36,7 @@ const getInitialProps = async (url: string) => {
   const isEmbed = pathname.endsWith("/embed") || (searchParams?.get("embedType") ?? null) !== null;
   const embedColorScheme = searchParams?.get("ui.color-scheme");
 
-  const req = { headers: headers(), cookies: cookies() };
+  const req = { headers: await headers(), cookies: await cookies() };
   const newLocale = await getLocale(req);
   const direction = dir(newLocale);
 
@@ -51,7 +51,7 @@ const getFallbackProps = () => ({
 });
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const h = headers();
+  const h = await headers();
 
   const fullUrl = h.get("x-url") ?? "";
   const nonce = h.get("x-csp") ?? "";
@@ -85,7 +85,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             --font-cal: ${calFont.style.fontFamily.replace(/\'/g, "")};
           }
         `}</style>
-        <IconSprites />
       </head>
       <body
         className="dark:bg-darkgray-50 bg-subtle antialiased"
@@ -101,6 +100,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               }
             : {}
         }>
+        <IconSprites />
         {!!process.env.NEXT_PUBLIC_BODY_SCRIPTS && (
           <script
             nonce={nonce}

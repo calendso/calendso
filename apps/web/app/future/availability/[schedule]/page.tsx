@@ -10,7 +10,8 @@ import { UserRepository } from "@calcom/lib/server/repository/user";
 
 import { AvailabilitySettingsWebWrapper } from "~/availability/[schedule]/schedule-view";
 
-export const generateMetadata = async ({ params }: PageProps) => {
+export const generateMetadata = async (props: PageProps) => {
+  const params = await props.params;
   const scheduleId = params?.schedule ? Number(params.schedule) : -1;
   const schedule = await ScheduleRepository.findScheduleById({ id: scheduleId });
 
@@ -27,7 +28,8 @@ export const generateMetadata = async ({ params }: PageProps) => {
   );
 };
 
-const Page = async ({ params }: PageProps) => {
+const Page = async ({ params: _params }: PageProps) => {
+  const params = await _params;
   if (params?.schedule) {
     notFound();
   }

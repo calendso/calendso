@@ -16,10 +16,12 @@ export const generateMetadata = async () => {
   );
 };
 
-const Page = async ({ params, searchParams }: PageProps) => {
+const Page = async (_props: PageProps) => {
+  const searchParams = await _props.searchParams;
+  const params = await _props.params;
   // cookie will be cleared in `/apps/web/middleware.ts`
-  const h = headers();
-  const context = buildLegacyCtx(h, cookies(), params, searchParams);
+  const h = await headers();
+  const context = buildLegacyCtx(h, await cookies(), params, searchParams);
   const ssr = await ssrInit(context);
   const props = {
     trpcState: ssr.dehydrate(),
