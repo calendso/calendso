@@ -45,6 +45,8 @@ export const AvailabilitySettingsWebWrapper = ({
   });
   const travelSchedules = travelSchedulesProp ?? travelSchedulesData;
 
+  const { data: connectedCalendarsData } = trpc.viewer.connectedCalendars.useQuery();
+
   const [isBulkUpdateModalOpen, setIsBulkUpdateModalOpen] = useState(false);
   const bulkUpdateDefaultAvailabilityMutation =
     trpc.viewer.availability.schedule.bulkUpdateToDefaultAvailability.useMutation({
@@ -103,11 +105,18 @@ export const AvailabilitySettingsWebWrapper = ({
   // We wait for the schedule to be loaded before rendering the form inside AvailabilitySettings
   // since `defaultValues` cannot be redeclared after first render and using `values` will
   // trigger a form reset when revalidating. Introducing flaky behavior.
-  if (!schedule) return null;
+  if (!schedule || !connectedCalendarsData) return null;
 
   return (
     <AvailabilitySettings
-      schedule={schedule}
+      schedule={{
+        ...schedule,
+        timeBlocks: schedule.timeBlocks.map((timeBlock) => {
+          return {
+            value: timeBlock,
+          };
+        }),
+      }}
       travelSchedules={isDefaultSchedule ? travelSchedules || [] : []}
       isDeleting={deleteMutation.isPending}
       isLoading={isPending}
@@ -119,11 +128,13 @@ export const AvailabilitySettingsWebWrapper = ({
       handleDelete={() => {
         scheduleId && deleteMutation.mutate({ scheduleId });
       }}
-      handleSubmit={async ({ dateOverrides, ...values }) => {
+      handleSubmit={async ({ dateOverrides, timeBlocks, ...values }) => {
         scheduleId &&
           updateMutation.mutate({
             scheduleId,
             dateOverrides: dateOverrides.flatMap((override) => override.ranges),
+            // convert into an array of strings from an array of objects
+            timeBlocks: timeBlocks.map((timeBlock) => timeBlock.value.trim()).filter((value) => value !== ""),
             ...values,
           });
       }}
@@ -133,6 +144,7 @@ export const AvailabilitySettingsWebWrapper = ({
         save: bulkUpdateDefaultAvailabilityMutation.mutate,
         isSaving: bulkUpdateDefaultAvailabilityMutation.isPending,
       }}
+      connectedCalendars={connectedCalendarsData?.connectedCalendars}
     />
   );
 };

@@ -212,6 +212,7 @@ export async function getEventType(
             },
           },
           timeZone: true,
+          timeBlocks: true,
         },
       },
       availability: {
@@ -244,6 +245,7 @@ export async function getEventType(
               },
               timeZone: true,
               id: true,
+              timeBlocks: true,
             },
           },
         },
