@@ -11,6 +11,8 @@ import monitorCallbackAsync, { monitorCallbackSync } from "@calcom/core/sentryWr
 import type { Dayjs } from "@calcom/dayjs";
 import dayjs from "@calcom/dayjs";
 import { getSlugOrRequestedSlug, orgDomainConfig } from "@calcom/ee/organizations/lib/orgDomains";
+import { getServerSession } from "@calcom/features/auth/lib/getServerSession";
+import { isUserReschedulingOwner } from "@calcom/features/bookings/lib/handleNewBooking/getRequiresConfirmationFlags";
 import { isEventTypeLoggingEnabled } from "@calcom/features/bookings/lib/isEventTypeLoggingEnabled";
 import { parseBookingLimit, parseDurationLimit } from "@calcom/lib";
 import { findQualifiedHosts } from "@calcom/lib/bookings/findQualifiedHosts";
@@ -21,6 +23,7 @@ import {
 import { RESERVED_SUBDOMAINS } from "@calcom/lib/constants";
 import { getUTCOffsetByTimezone } from "@calcom/lib/date-fns";
 import { getDefaultEvent } from "@calcom/lib/defaultEvents";
+import getOrgIdFromMemberOrTeamId from "@calcom/lib/getOrgIdFromMemberOrTeamId";
 import {
   isTimeOutOfBounds,
   calculatePeriodLimits,
@@ -31,7 +34,7 @@ import { safeStringify } from "@calcom/lib/safeStringify";
 import { UserRepository } from "@calcom/lib/server/repository/user";
 import getSlots from "@calcom/lib/slots";
 import prisma, { availabilityUserSelect } from "@calcom/prisma";
-import { PeriodType, Prisma } from "@calcom/prisma/client";
+import { MembershipRole, PeriodType, Prisma } from "@calcom/prisma/client";
 import { SchedulingType } from "@calcom/prisma/enums";
 import { BookingStatus } from "@calcom/prisma/enums";
 import { credentialForCalendarServiceSelect } from "@calcom/prisma/selects/credential";
@@ -436,7 +439,8 @@ async function _getAvailableSlots({ input, ctx }: GetScheduleOptions): Promise<I
         isValidOrgDomain: !!input.orgSlug && !RESERVED_SUBDOMAINS.includes(input.orgSlug),
       }
     : orgDomainConfig(ctx?.req);
-
+  const session = ctx?.req ? await getServerSession({ req: ctx?.req }) : null;
+  const user = session?.user;
   if (process.env.INTEGRATION_TEST_MODE === "true") {
     logger.settings.minLevel = 2;
   }
@@ -508,6 +512,7 @@ async function _getAvailableSlots({ input, ctx }: GetScheduleOptions): Promise<I
       startTime,
       endTime,
       bypassBusyCalendarTimes,
+      userId: user?.id,
     });
 
   // If contact skipping, determine if there's availability within two weeks
@@ -532,6 +537,7 @@ async function _getAvailableSlots({ input, ctx }: GetScheduleOptions): Promise<I
             startTime,
             endTime,
             bypassBusyCalendarTimes,
+            userId: user?.id,
           }));
       }
     }
@@ -1017,6 +1023,7 @@ const calculateHostsAndAvailabilities = async ({
   startTime,
   endTime,
   bypassBusyCalendarTimes,
+  userId,
 }: {
   input: TGetScheduleInputSchema;
   eventType: Exclude<Awaited<ReturnType<typeof getRegularOrDynamicEventType>>, null>;
@@ -1029,12 +1036,10 @@ const calculateHostsAndAvailabilities = async ({
   startTime: ReturnType<typeof getStartTime>;
   endTime: Dayjs;
   bypassBusyCalendarTimes: boolean;
+  userId?: number | undefined;
 }) => {
-  if (
-    input.rescheduleUid &&
-    eventType.rescheduleWithSameRoundRobinHost &&
-    eventType.schedulingType === SchedulingType.ROUND_ROBIN
-  ) {
+  const guests: (GetAvailabilityUser & { isFixed: boolean })[] = [];
+  if (input.rescheduleUid) {
     const originalRescheduledBooking = await prisma.booking.findFirst({
       where: {
         uid: input.rescheduleUid,
@@ -1044,17 +1049,81 @@ const calculateHostsAndAvailabilities = async ({
       },
       select: {
         userId: true,
+        eventType: {
+          select: {
+            teamId: true,
+          },
+        },
+        attendees: {
+          select: {
+            email: true,
+          },
+        },
       },
     });
-    routedHostsWithContactOwnerAndFixedHosts = routedHostsWithContactOwnerAndFixedHosts.filter(
-      (host) => host.user.id === originalRescheduledBooking?.userId || 0
-    );
+    if (
+      eventType.rescheduleWithSameRoundRobinHost &&
+      eventType.schedulingType === SchedulingType.ROUND_ROBIN
+    ) {
+      routedHostsWithContactOwnerAndFixedHosts = routedHostsWithContactOwnerAndFixedHosts.filter(
+        (host) => host.user.id === originalRescheduledBooking?.userId || 0
+      );
+    }
+    const userReschedulingIsOwner = isUserReschedulingOwner(userId, originalRescheduledBooking?.userId || 0);
+    let isDynamicEventAndUserIsOwner = false;
+    if (input.usernameList && input.usernameList.length > 1 && userId) {
+      isDynamicEventAndUserIsOwner = eventType.users.some((eventUser) => eventUser.id === userId);
+    }
+    let isTeamOrOrgOwnerOrAdmin = false;
+    const orgId = userId && (await getOrgIdFromMemberOrTeamId({ memberId: userId }));
+    if ((input?.isTeamEvent && originalRescheduledBooking?.eventType?.teamId) || orgId) {
+      const teamIdFilter = [originalRescheduledBooking?.eventType?.teamId, orgId].filter(Boolean) as number[];
+      const teamOrOrgOwnerOrAdmin = await prisma.membership.findFirst({
+        where: {
+          teamId: {
+            in: teamIdFilter,
+          },
+          userId: userId,
+          role: {
+            in: [MembershipRole.ADMIN, MembershipRole.OWNER],
+          },
+        },
+        select: {
+          userId: true,
+        },
+      });
+      isTeamOrOrgOwnerOrAdmin = !!teamOrOrgOwnerOrAdmin;
+    }
+    if (userReschedulingIsOwner || isDynamicEventAndUserIsOwner || isTeamOrOrgOwnerOrAdmin) {
+      const attendeesEmailList = originalRescheduledBooking?.attendees.map((attendee) => attendee.email);
+      const attendees = await prisma.user.findMany({
+        where: {
+          email: {
+            in: attendeesEmailList,
+          },
+        },
+        select: {
+          credentials: { select: credentialForCalendarServiceSelect },
+          ...availabilityUserSelect,
+        },
+      });
+      attendees.forEach((user) => {
+        guests.push({
+          ...user,
+          isFixed: true,
+        });
+      });
+    }
   }
 
-  const usersWithCredentials = monitorCallbackSync(getUsersWithCredentialsConsideringContactOwner, {
+  let usersWithCredentials = monitorCallbackSync(getUsersWithCredentialsConsideringContactOwner, {
     contactOwnerEmail,
     hosts: routedHostsWithContactOwnerAndFixedHosts,
   });
+
+  if (guests.length) {
+    usersWithCredentials = [...usersWithCredentials, ...guests];
+  }
 
   loggerWithEventDetails.debug("Using users", {
     usersWithCredentials: usersWithCredentials.map((user) => user.email),
