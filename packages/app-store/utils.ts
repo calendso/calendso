@@ -104,6 +104,16 @@ function getApps(credentials: CredentialDataWithTeamName[], filterOnCredentials?
   return apps;
 }
 
+export function getAppsBySlug(
+  credentials: CredentialDataWithTeamName[],
+  slug: string,
+  filterOnCredentials?: boolean
+) {
+  const apps = getApps(credentials, filterOnCredentials);
+
+  return apps.filter((app) => app.slug === slug);
+}
+
 export function getLocalAppMetadata() {
   return ALL_APPS;
 }
