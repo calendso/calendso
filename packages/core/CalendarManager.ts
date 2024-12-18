@@ -39,7 +39,7 @@ export const getCalendarCredentials = (credentials: Array<CredentialPayload>) =>
 
 export const getConnectedCalendars = async (
   calendarCredentials: ReturnType<typeof getCalendarCredentials>,
-  selectedCalendars: { externalId: string }[],
+  selectedCalendars: { externalId: string; defaultReminder?: number }[],
   destinationCalendarExternalId?: string
 ) => {
   let destinationCalendar: IntegrationCalendar | undefined;
@@ -92,6 +92,9 @@ export const getConnectedCalendars = async (
           credentialId,
           primary,
           calendars,
+          selectedCalendar: selectedCalendars?.find(
+            (selected) => selected.externalId === primary?.externalId
+          ),
         };
       } catch (error) {
         let errorMessage = "Could not get connected calendars";
