@@ -231,8 +231,7 @@ test.describe("Manage Booking Questions", () => {
   });
 
   test.describe("For Team EventType", () => {
-    // eslint-disable-next-line playwright/no-skipped-test
-    test.skip("Do a booking with a user added question and verify a few thing in b/w", async ({
+    test("Do a booking with a user added question and verify a few thing in b/w", async ({
       page,
       users,
       context,
@@ -362,6 +361,7 @@ async function runTestStepsCommonForTeamAndUserEventType(
             await page.locator('[data-testid="field-response"][data-fob-field="how-are-you"]').innerText()
           ).toBe("I am great!");
 
+          // FIXME: This is where the test times out since the webhook is not being triggered
           await webhookReceiver.waitForRequestCount(1);
 
           const [request] = webhookReceiver.requestList;
