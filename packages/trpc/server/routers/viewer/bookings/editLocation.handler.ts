@@ -126,7 +126,7 @@ async function getAllCredentials({
   user,
   conferenceCredentialId,
 }: {
-  user: { id: number };
+  user: { id: number; email: string };
   conferenceCredentialId: number | null;
 }) {
   const credentials = await getUsersCredentials(user);
