@@ -11,7 +11,7 @@ export enum ButtonState {
   DENIED = "denied",
 }
 
-export const useNotifications = () => {
+export function useNotifications() {
   const [buttonToShow, setButtonToShow] = useState<ButtonState>(ButtonState.NONE);
   const [isLoading, setIsLoading] = useState(false);
   const { t } = useLocale();
@@ -42,23 +42,24 @@ export const useNotifications = () => {
   });
 
   useEffect(() => {
-    const decideButtonToShow = async () => {
+    const checkPermissions = async () => {
       if (!("Notification" in window)) {
         console.log("Notifications not supported");
+        return;
       }
 
       const registration = await navigator.serviceWorker?.getRegistration();
       if (!registration) return;
+
       const subscription = await registration.pushManager.getSubscription();
+      const notificationPermission = Notification.permission;
 
-      const permission = Notification.permission;
-
-      if (permission === ButtonState.DENIED) {
+      if (notificationPermission === ButtonState.DENIED) {
         setButtonToShow(ButtonState.DENIED);
         return;
       }
 
-      if (permission === "default") {
+      if (notificationPermission === "default") {
         setButtonToShow(ButtonState.ALLOW);
         return;
       }
@@ -71,11 +72,19 @@ export const useNotifications = () => {
       setButtonToShow(ButtonState.DISABLE);
     };
 
-    decideButtonToShow();
+    checkPermissions();
   }, []);
 
   const enableNotifications = async () => {
     setIsLoading(true);
+
+    if (!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) {
+      console.error("VAPID public key is missing");
+      setIsLoading(false);
+      showToast(t("browser_notifications_configuration_error"), "error");
+      return;
+    }
+
     const permissionResponse = await Notification.requestPermission();
 
     if (permissionResponse === ButtonState.DENIED) {
@@ -92,35 +101,36 @@ export const useNotifications = () => {
     }
 
     const registration = await navigator.serviceWorker?.getRegistration();
-
     if (!registration) {
-      // This will not happen ideally as the button will not be shown if the service worker is not registered
+      console.error("Service worker registration not found");
+      setIsLoading(false);
+      showToast(t("browser_notifications_not_supported"), "error");
       return;
     }
 
     let subscription: PushSubscription;
     try {
+      const vapidKey = urlB64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY);
       subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlB64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || ""),
+        applicationServerKey: vapidKey,
       });
+      addSubscription(
+        { subscription: JSON.stringify(subscription) },
+        {
+          onError: async (error) => {
+            console.error("Subscription error:", error);
+            await subscription.unsubscribe();
+          },
+        }
+      );
     } catch (error) {
-      // This happens in Brave browser as it does not have a push service
-      console.error(error);
+      console.error("Push subscription error:", error);
       setIsLoading(false);
       setButtonToShow(ButtonState.NONE);
       showToast(t("browser_notifications_not_supported"), "error");
       return;
     }
-
-    addSubscription(
-      { subscription: JSON.stringify(subscription) },
-      {
-        onError: async () => {
-          await subscription.unsubscribe();
-        },
-      }
-    );
   };
 
   const disableNotifications = async () => {
@@ -151,7 +161,7 @@ export const useNotifications = () => {
     enableNotifications,
     disableNotifications,
   };
-};
+}
 
 const urlB64ToUint8Array = (base64String: string) => {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);

@@ -24,6 +24,7 @@ export const sendNotification = async ({
   url,
   actions,
   requireInteraction,
+  type = "INSTANT_MEETING",
 }: {
   subscription: Subscription;
   title: string;
@@ -32,6 +33,7 @@ export const sendNotification = async ({
   url?: string;
   actions?: { action: string; title: string; type: string; image: string | null }[];
   requireInteraction?: boolean;
+  type?: string;
 }) => {
   try {
     const payload = JSON.stringify({
@@ -40,9 +42,11 @@ export const sendNotification = async ({
       icon,
       data: {
         url,
+        type,
       },
       actions,
       requireInteraction,
+      tag: `cal-notification-${Date.now()}`,
     });
     await webpush.sendNotification(subscription, payload);
   } catch (error) {

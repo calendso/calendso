@@ -11,24 +11,20 @@ self.addEventListener("push", async (event) => {
     return;
   }
 
-  const title = notificationData.title || "You have a new notification from Cal.com";
-  const image = "https://cal.com/api/logo?type=icon";
-  const newNotificationOptions = {
-    requireInteraction: true,
-    ...notificationData,
-    icon: image,
-    badge: image,
-    data: {
-      url: notificationData.data?.url || "https://app.cal.com",
-    },
-    silent: false,
-    vibrate: [300, 100, 400],
-    tag: `notification-${Date.now()}-${Math.random()}`,
-  };
+  const title = notificationData.title || "New Cal.com Notification";
+  const image = notificationData.icon || "https://cal.com/api/logo?type=icon";
+
+  // Special handling for instant meetings
+  if (notificationData.data?.type === "INSTANT_MEETING") {
+    allClients.forEach(client => {
+      client.postMessage({
+        type: 'PLAY_NOTIFICATION_SOUND'
+      });
+    });
+  }
 
   const existingNotifications = await self.registration.getNotifications();
 
-  // Display each existing notification again to make sure old ones can still be clicked
   existingNotifications.forEach((notification) => {
     const options = {
       body: notification.body,
@@ -40,26 +36,62 @@ self.addEventListener("push", async (event) => {
       requireInteraction: notification.requireInteraction,
       tag: notification.tag,
     };
+
     self.registration.showNotification(notification.title, options);
   });
 
-  // Show the new notification
-  self.registration.showNotification(title, newNotificationOptions);
+    const notificationOptions = {
+      body: notificationData.body,
+      icon: image,
+      badge: image,
+      data: notificationData.data,
+      tag: notificationData.tag || `cal-notification-${Date.now()}`,
+      renotify: true,
+      requireInteraction: notificationData.requireInteraction ?? true,
+      actions: notificationData.actions || [],
+      vibrate: [200, 100, 200],
+   };
+
+  try {
+    await self.registration.showNotification(title, notificationOptions);
+    console.log("Notification shown successfully");
+  } catch (error) {
+    console.error("Error showing notification:", error);
+  }
 });
 
 self.addEventListener("notificationclick", (event) => {
-  if (!event.action) {
-    // Normal Notification Click
-    event.notification.close();
-    const url = event.notification.data.url;
-    event.waitUntil(self.clients.openWindow(url));
-  }
 
-  switch (event.action) {
-    case "connect-action":
-      event.notification.close();
-      const url = event.notification.data.url;
-      event.waitUntil(self.clients.openWindow(url));
-      break;
+  if (event.notification.data?.type === "INSTANT_MEETING") {
+    const stopSound = async () => {
+      const allClients = await clients.matchAll({
+        type: "window",
+        includeUncontrolled: true,
+      });
+
+      allClients.forEach(client => {
+        client.postMessage({
+          type: 'STOP_NOTIFICATION_SOUND'
+        });
+      });
+    };
+
+    event.waitUntil(Promise.all([
+      stopSound(),
+      clients.openWindow(event.notification.data.url)
+    ]));
+  } else {
+    // Handle regular notifications
+    event.waitUntil(
+      clients.openWindow(event.notification.data?.url || "https://app.cal.com")
+    );
   }
+});
+
+self.addEventListener('install', (event) => {
+  console.log('Service Worker installing.');
+});
+
+self.addEventListener('activate', (event) => {
+  console.log('Service Worker activated.');
 });
