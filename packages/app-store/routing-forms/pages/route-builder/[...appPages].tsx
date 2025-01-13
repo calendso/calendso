@@ -11,7 +11,7 @@ import type { UseFormReturn } from "react-hook-form";
 import Shell from "@calcom/features/shell/Shell";
 import { areTheySiblingEntitites } from "@calcom/lib/entityPermissionUtils";
 import { useLocale } from "@calcom/lib/hooks/useLocale";
-import { buildEmptyQueryValue } from "@calcom/lib/raqb/raqbUtils";
+import { buildEmptyQueryValue, raqbQueryValueUtils } from "@calcom/lib/raqb/raqbUtils";
 import type { App_RoutingForms_Form } from "@calcom/prisma/client";
 import { SchedulingType } from "@calcom/prisma/client";
 import type { RouterOutputs } from "@calcom/trpc/react";
@@ -25,6 +25,7 @@ import {
   TextField,
   Badge,
   Divider,
+  SettingsToggle,
 } from "@calcom/ui";
 
 import { routingFormAppComponents } from "../../appComponents";
@@ -145,6 +146,7 @@ const buildEventsData = ({
     value: string;
     eventTypeId: number;
     eventTypeAppMetadata?: Record<string, any>;
+    isRRWeightsEnabled: boolean;
   }[] = [];
   const eventTypesMap = new Map<
     number,
@@ -190,6 +192,7 @@ const buildEventsData = ({
         value: uniqueSlug,
         eventTypeId: eventType.id,
         eventTypeAppMetadata,
+        isRRWeightsEnabled: eventType.isRRWeightsEnabled,
       });
     });
   });
@@ -212,6 +215,7 @@ const Route = ({
   disabled = false,
   fieldIdentifiers,
   eventTypesByGroup,
+  attributes,
 }: {
   form: Form;
   route: EditFormRoute;
@@ -227,6 +231,7 @@ const Route = ({
   appUrl: string;
   disabled?: boolean;
   eventTypesByGroup: EventTypesByGroup;
+  attributes?: Attribute[];
 }) => {
   const { t } = useLocale();
   const isTeamForm = form.teamId !== null;
@@ -241,6 +246,10 @@ const Route = ({
       : "";
 
   const [customEventTypeSlug, setCustomEventTypeSlug] = useState<string>("");
+
+  const [attributeIdForWeights, setAttributeIdForWeights] = useState(
+    "attributeIdForWeights" in route ? route.attributeIdForWeights : undefined
+  );
 
   useEffect(() => {
     const isCustom =
@@ -290,6 +299,15 @@ const Route = ({
     });
   };
 
+  const onChangeAttributeIdForWeights = (
+    route: EditFormRoute & { attributeIdForWeights?: string },
+    attributeIdForWeights: string | undefined
+  ) => {
+    setRoute(route.id, {
+      attributeIdForWeights,
+    });
+  };
+
   const renderBuilder = useCallback(
     (props: BuilderProps) => (
       <div className="query-builder-container">
@@ -335,7 +353,9 @@ const Route = ({
   const shouldShowFormFieldsQueryBuilder = (route.isFallback && hasRules(route)) || !route.isFallback;
   const eventTypeRedirectUrlOptions =
     eventOptions.length !== 0
-      ? [{ label: t("custom"), value: "custom", eventTypeId: 0 }].concat(eventOptions)
+      ? [{ label: t("custom"), value: "custom", eventTypeId: 0, isRRWeightsEnabled: false }].concat(
+          eventOptions
+        )
       : [];
 
   const eventTypeRedirectUrlSelectedOption =
@@ -346,6 +366,7 @@ const Route = ({
           label: t("custom"),
           value: "custom",
           eventTypeId: 0,
+          isRRWeightsEnabled: false,
         }
       : undefined;
 
@@ -380,6 +401,33 @@ const Route = ({
         configFor: ConfigFor.Attributes,
       })
     : null;
+
+  let attributesWithWeightsEnabled: Attribute[] = [];
+
+  if (eventTypeRedirectUrlSelectedOption?.isRRWeightsEnabled) {
+    const validatedQueryValue = route.attributesQueryBuilderState?.tree
+      ? QbUtils.getTree(route.attributesQueryBuilderState.tree)
+      : null;
+
+    if (
+      validatedQueryValue &&
+      raqbQueryValueUtils.isQueryValueARuleGroup(validatedQueryValue) &&
+      validatedQueryValue.children1
+    ) {
+      const attributeIds = Object.values(validatedQueryValue.children1).map((rule) => {
+        if (rule.type === "rule" && rule?.properties?.field) {
+          return rule.properties.field;
+        }
+      });
+
+      attributesWithWeightsEnabled = attributes
+        ? attributes.filter(
+            (attribute) =>
+              attribute.isWeightsEnabled && attributeIds.find((attributeId) => attributeId === attribute.id)
+          )
+        : [];
+    }
+  }
 
   const attributesQueryBuilder =
     route.action?.type === RouteActionType.EventTypeRedirectUrl && isTeamForm ? (
@@ -589,6 +637,45 @@ const Route = ({
               ) : null}
             </div>
             {attributesQueryBuilder}
+            {attributesWithWeightsEnabled.length > 0 ? (
+              <div className="mt-8">
+                <SettingsToggle
+                  title={t("use_attribute_weights")}
+                  description={t("if_enabled_ignore_event_type_weights")}
+                  checked={!!attributeIdForWeights}
+                  onCheckedChange={(checked) => {
+                    const attributeId = checked ? attributesWithWeightsEnabled[0].id : undefined;
+                    setAttributeIdForWeights(attributeId);
+                    onChangeAttributeIdForWeights(route, attributeId);
+                  }}
+                />
+                {!!attributeIdForWeights ? (
+                  <SelectField
+                    containerClassName="mb-6 mt-4 data-testid-select-router"
+                    label={t("attribute_for_weights")}
+                    options={attributesWithWeightsEnabled.map((attribute) => {
+                      return { value: attribute.id, label: attribute.name };
+                    })}
+                    value={{
+                      value: attributeIdForWeights,
+                      label: attributesWithWeightsEnabled.find(
+                        (attribute) => attribute.id === attributeIdForWeights
+                      )?.name,
+                    }}
+                    onChange={(option) => {
+                      if (option) {
+                        setAttributeIdForWeights(option.value);
+                        onChangeAttributeIdForWeights(route, option.value);
+                      }
+                    }}
+                  />
+                ) : (
+                  <></>
+                )}
+              </div>
+            ) : (
+              <></>
+            )}
             <Divider className="mb-6 mt-6" />
             {fallbackAttributesQueryBuilder}
           </div>
@@ -720,6 +807,7 @@ function useRoutes({
           queryValue: route.queryValue,
           attributesQueryValue: route.attributesQueryValue,
           fallbackAttributesQueryValue: route.fallbackAttributesQueryValue,
+          attributeIdForWeights: route.attributeIdForWeights,
         };
       });
     }
@@ -738,7 +826,7 @@ const Routes = ({
   form: inferSSRProps<typeof getServerSideProps>["form"];
   hookForm: UseFormReturn<RoutingFormWithResponseCount>;
   appUrl: string;
-  attributes: Attribute[] | null;
+  attributes?: Attribute[];
   eventTypesByGroup: EventTypesByGroup;
 }) => {
   const { routes: serializedRoutes } = hookForm.getValues();
@@ -913,6 +1001,7 @@ const Routes = ({
               form={form}
               appUrl={appUrl}
               key={route.id}
+              attributes={attributes}
               formFieldsQueryBuilderConfig={formFieldsQueryBuilderConfig}
               attributesQueryBuilderConfig={attributesQueryBuilderConfig}
               route={route}
@@ -1062,7 +1151,6 @@ function Page({
     console.error("Events not available");
     return <div>{t("something_went_wrong")}</div>;
   }
-
   return (
     <div className="route-config">
       <Routes
@@ -1070,7 +1158,7 @@ function Page({
         appUrl={appUrl}
         eventTypesByGroup={eventTypesByGroup}
         form={form}
-        attributes={attributes || null}
+        attributes={attributes}
       />
     </div>
   );
