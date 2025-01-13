@@ -2,8 +2,9 @@ import { isSMSOrWhatsappAction } from "@calcom/features/ee/workflows/lib/actionH
 import { IS_SELF_HOSTED } from "@calcom/lib/constants";
 import hasKeyInMetadata from "@calcom/lib/hasKeyInMetadata";
 import { WorkflowRepository } from "@calcom/lib/server/repository/workflow";
+import { getTimeFormatStringFromUserTimeFormat } from "@calcom/lib/timeFormat";
 import type { PrismaClient } from "@calcom/prisma";
-import { WorkflowActions } from "@calcom/prisma/enums";
+import { WorkflowActions, WorkflowTemplates } from "@calcom/prisma/enums";
 import type { TrpcSessionUser } from "@calcom/trpc/server/trpc";
 
 import { TRPCError } from "@trpc/server";
@@ -20,6 +21,7 @@ import {
   verifyEmailSender,
   removeSmsReminderFieldForEventTypes,
   isStepEdited,
+  getTemplateText,
 } from "./util";
 
 type UpdateOptions = {
@@ -332,9 +334,34 @@ export const updateHandler = async ({ ctx, input }: UpdateOptions) => {
         },
       });
     } else if (isStepEdited(oldStep, newStep)) {
+      const emailBody = newStep.reminderBody;
+      const emailSubject = newStep.emailSubject;
+
       // check if step that require team plan already existed before
-      if (!hasPaidPlan && !isSMSOrWhatsappAction(oldStep.action) && isSMSOrWhatsappAction(newStep.action)) {
-        throw new TRPCError({ code: "UNAUTHORIZED", message: "Not available on free plan" });
+      if (!hasPaidPlan) {
+        const isChangingToSMSOrWhatsapp =
+          !isSMSOrWhatsappAction(oldStep.action) && isSMSOrWhatsappAction(newStep.action);
+        const isChangingToCustomTemplate =
+          newStep.template === WorkflowTemplates.CUSTOM && oldStep.template !== WorkflowTemplates.CUSTOM;
+
+        if (isChangingToSMSOrWhatsapp || isChangingToCustomTemplate) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "Not available on free plan" });
+        }
+
+        //if email body or subject was changed, change to predefined template
+        if (newStep.emailSubject !== oldStep.emailSubject || newStep.reminderBody !== oldStep.reminderBody) {
+          // already existing custom templates can't be updated
+          if (newStep.template === WorkflowTemplates.CUSTOM) {
+            throw new TRPCError({ code: "UNAUTHORIZED", message: "Not available on free plan" });
+          }
+
+          // on free plans always use predefined templates
+          const { body, subject } = getTemplateText(newStep.template, newStep.action, {
+            locale: ctx.user.locale,
+            timeFormat: getTimeFormatStringFromUserTimeFormat(ctx.user.timeFormat),
+          });
+          newStep = { ...newStep, reminderBody: body, emailSubject: subject };
+        }
       }
 
       // update step
@@ -388,8 +415,18 @@ export const updateHandler = async ({ ctx, input }: UpdateOptions) => {
     steps
       .filter((step) => step.id <= 0)
       .map(async (newStep) => {
-        if (isSMSOrWhatsappAction(newStep.action) && !hasPaidPlan) {
-          throw new TRPCError({ code: "UNAUTHORIZED", message: "Not available on free plan" });
+        if (!hasPaidPlan) {
+          if (isSMSOrWhatsappAction(newStep.action) || newStep.template === WorkflowTemplates.CUSTOM) {
+            throw new TRPCError({ code: "UNAUTHORIZED", message: "Not available on free plan" });
+          }
+
+          //only allow predefined templates on free plan
+          const { body, subject } = getTemplateText(newStep.template, newStep.action, {
+            locale: ctx.user.locale,
+            timeFormat: getTimeFormatStringFromUserTimeFormat(ctx.user.timeFormat),
+          });
+
+          newStep = { ...newStep, reminderBody: body, emailSubject: subject };
         }
 
         if (newStep.action === WorkflowActions.EMAIL_ADDRESS) {
