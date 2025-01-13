@@ -1,24 +1,27 @@
-"use client";
-
+import { PageProps } from "app/_types";
+import { _generateMetadata, getTranslate } from "app/_utils";
+import { WithLayout } from "app/layoutHOC";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import z from "zod";
+import { z } from "zod";
 
-import { useLocale } from "@calcom/lib/hooks/useLocale";
 import { Button, Icon } from "@calcom/ui";
 
 import AuthContainer from "@components/ui/AuthContainer";
 
-import type { PageProps } from "@server/lib/auth/error/getStaticProps";
+export const generateMetadata = async () => {
+  return await _generateMetadata(
+    (t) => t("error"),
+    () => ""
+  );
+};
 
 const querySchema = z.object({
   error: z.string().optional(),
 });
 
-export default function Error(props: PageProps) {
-  const { t } = useLocale();
-  const searchParams = useSearchParams();
-  const { error } = querySchema.parse({ error: searchParams?.get("error") || undefined });
+const ServerPage = async ({ searchParams }: PageProps) => {
+  const t = await getTranslate();
+  const { error } = querySchema.parse({ error: searchParams?.error || undefined });
   const errorMsg = error || t("error_during_login");
   return (
     <AuthContainer title="" description="">
@@ -39,4 +42,6 @@ export default function Error(props: PageProps) {
       </div>
     </AuthContainer>
   );
-}
+};
+
+export default WithLayout({ ServerPage })<"P">;
