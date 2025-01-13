@@ -4139,7 +4139,7 @@ __metadata:
     "@calcom/trpc": "*"
     "@calcom/ui": "*"
     bcryptjs: ^2.4.3
-    dub: ^0.35.0
+    dub: ^0.46.12
     handlebars: ^4.7.7
     jose: ^4.13.1
     lru-cache: ^9.0.3
@@ -4216,6 +4216,15 @@ __metadata:
   resolution: "@calcom/googlevideo@workspace:packages/app-store/googlevideo"
   dependencies:
     "@calcom/prisma": "*"
+    "@calcom/types": "*"
+  languageName: unknown
+  linkType: soft
+
+"@calcom/granola@workspace:packages/app-store/granola":
+  version: 0.0.0-use.local
+  resolution: "@calcom/granola@workspace:packages/app-store/granola"
+  dependencies:
+    "@calcom/lib": "*"
     "@calcom/types": "*"
   languageName: unknown
   linkType: soft
@@ -23479,12 +23488,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"dub@npm:^0.35.0":
-  version: 0.35.0
-  resolution: "dub@npm:0.35.0"
+"dub@npm:^0.46.12":
+  version: 0.46.12
+  resolution: "dub@npm:0.46.12"
   peerDependencies:
     zod: ">= 3"
-  checksum: 162bd1ff62b62044e3840d3128f341baa8d07828aaf9ca2e94a562b7196df857c1fcdbf2495edfd8b7055970eb1c64298a2265dca81cb4d7bdc65ddc97980905
+  checksum: 4210c60d8057a1d6c2035033410927e9aa35b3052aeb1c91ddc714b525c1ec2a08c81a928da9f7a1ddae1d7c7a774ffbbbb20edf1eb7c83388c9f89a784ec9ea
   languageName: node
   linkType: hard
 
