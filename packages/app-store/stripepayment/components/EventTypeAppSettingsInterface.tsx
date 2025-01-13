@@ -24,7 +24,7 @@ const EventTypeAppSettingsInterface: EventTypeAppSettingsComponent = ({
 }) => {
   const price = getAppData("price");
   const currency = getAppData("currency") || currencyOptions[0].value;
-  const [selectedCurrency, setSelectedCurrency] = useState(
+  const [selectedCurrency, setSelectedCurrency] = useState<Option>(
     currencyOptions.find((c) => c.value === currency) || {
       label: currencyOptions[0].label,
       value: currencyOptions[0].value,
@@ -102,7 +102,7 @@ const EventTypeAppSettingsInterface: EventTypeAppSettingsComponent = ({
             <label className="text-default mb-1 block text-sm font-medium" htmlFor="currency">
               {t("currency")}
             </label>
-            <Select
+            <Select<Option>
               data-testid="stripe-currency-select"
               variant="default"
               options={currencyOptions}
@@ -112,7 +112,7 @@ const EventTypeAppSettingsInterface: EventTypeAppSettingsComponent = ({
               value={selectedCurrency}
               className="text-black"
               defaultValue={selectedCurrency}
-              onChange={(e) => {
+              onChange={(e?: Option) => {
                 if (e) {
                   setSelectedCurrency(e);
                   setAppData("currency", e.value);
@@ -134,7 +134,7 @@ const EventTypeAppSettingsInterface: EventTypeAppSettingsComponent = ({
               options={paymentOptions.map((option) => {
                 return { ...option, label: t(option.label) || option.label };
               })}
-              onChange={(input) => {
+              onChange={(input?: Option) => {
                 if (input) {
                   setAppData("paymentOption", input.value);
                   if (input.value === "HOLD") {
@@ -197,7 +197,9 @@ const EventTypeAppSettingsInterface: EventTypeAppSettingsComponent = ({
                       options={options}
                       isSearchable={false}
                       isDisabled={disabled}
-                      onChange={(option) => setAppData("refundCountCalendarDays", option?.value === 1)}
+                      onChange={(option: (typeof options)[0]) =>
+                        setAppData("refundCountCalendarDays", option?.value === 1)
+                      }
                       value={getSelectedOption()}
                       defaultValue={getSelectedOption()}
                     />
