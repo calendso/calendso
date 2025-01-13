@@ -80,6 +80,7 @@ type UserCredentialType = {
   teamId: number | null;
   key: Prisma.JsonValue;
   invalid: boolean | null;
+  domainWideDelegationCredentialId?: string | null;
 };
 
 export async function patchHandler(req: NextApiRequest) {
@@ -185,7 +186,7 @@ async function verifyCredentialsAndGetId({
   currentCredentialId: number | null;
 }) {
   if (parsedBody.integration && parsedBody.externalId) {
-    const calendarCredentials = getCalendarCredentials(userCredentials);
+    const calendarCredentials = await getCalendarCredentials(userCredentials);
 
     const { connectedCalendars } = await getConnectedCalendars(
       calendarCredentials,

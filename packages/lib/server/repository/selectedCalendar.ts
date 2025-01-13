@@ -4,6 +4,8 @@ import { prisma } from "@calcom/prisma";
 import { credentialForCalendarServiceSelect } from "@calcom/prisma/selects/credential";
 import type { SelectedCalendarEventTypeIds } from "@calcom/types/Calendar";
 
+import { buildCredentialPayloadForCalendar } from "../buildCredentialPayloadForCalendar";
+
 export type UpdateArguments = {
   where: FindManyArgs["where"];
   data: Prisma.SelectedCalendarUpdateManyArgs["data"];
@@ -79,18 +81,27 @@ export class SelectedCalendarRepository {
     // userId_integration_externalId_eventTypeId is a unique constraint but with eventTypeId being nullable
     // So, this unique constraint can't be used in upsert. Prisma doesn't allow that, So, we do create and update separately
     const conflictingCalendar = await SelectedCalendarRepository.findConflicting(data);
-
+    const credentialPayload = buildCredentialPayloadForCalendar({
+      credentialId: data.credentialId,
+      domainWideDelegationCredentialId: data.domainWideDelegationCredentialId,
+    });
     if (conflictingCalendar) {
       return await prisma.selectedCalendar.update({
         where: {
           id: conflictingCalendar.id,
         },
-        data,
+        data: {
+          ...data,
+          ...credentialPayload,
+        },
       });
     }
 
     return await prisma.selectedCalendar.create({
-      data,
+      data: {
+        ...data,
+        ...credentialPayload,
+      },
     });
   }
 
@@ -207,9 +218,20 @@ export class SelectedCalendarRepository {
         googleChannelId,
       },
       select: {
+        userId: true,
         credential: {
           select: {
             ...credentialForCalendarServiceSelect,
+            selectedCalendars: {
+              orderBy: {
+                externalId: "asc",
+              },
+            },
+          },
+        },
+        domainWideDelegationCredential: {
+          select: {
+            id: true,
             selectedCalendars: {
               orderBy: {
                 externalId: "asc",

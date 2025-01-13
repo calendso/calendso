@@ -57,6 +57,7 @@ const user: User & { credentials: CredentialPayload[] } = {
   travelSchedules: [],
 };
 
+
 const customInputs: CustomInputSchema[] = [];
 
 const commons = {

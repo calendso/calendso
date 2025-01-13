@@ -14,6 +14,7 @@ const selectedCalendarSelectSchema = z.object({
   integration: z.string(),
   externalId: z.string(),
   credentialId: z.coerce.number(),
+  domainWideDelegationCredentialId: z.string().nullish().default(null),
   eventTypeId: z.coerce.number().nullish(),
 });
 
@@ -41,12 +42,14 @@ type CustomNextApiRequest = NextApiRequest & {
 async function postHandler(req: CustomNextApiRequest) {
   if (!req.userWithCredentials) throw new HttpError({ statusCode: 401, message: "Not authenticated" });
   const user = req.userWithCredentials;
-  const { integration, externalId, credentialId, eventTypeId } = selectedCalendarSelectSchema.parse(req.body);
+  const { integration, externalId, credentialId, eventTypeId, domainWideDelegationCredentialId } =
+    selectedCalendarSelectSchema.parse(req.body);
   await SelectedCalendarRepository.upsert({
     userId: user.id,
     integration,
     externalId,
     credentialId,
+    domainWideDelegationCredentialId,
     eventTypeId: eventTypeId ?? null,
   });
 
@@ -56,10 +59,15 @@ async function postHandler(req: CustomNextApiRequest) {
 async function deleteHandler(req: CustomNextApiRequest) {
   if (!req.userWithCredentials) throw new HttpError({ statusCode: 401, message: "Not authenticated" });
   const user = req.userWithCredentials;
-  const { integration, externalId, credentialId, eventTypeId } = selectedCalendarSelectSchema.parse(
-    req.query
-  );
-  const calendarCacheRepository = await CalendarCache.initFromCredentialId(credentialId);
+  const { integration, externalId, credentialId, eventTypeId, domainWideDelegationCredentialId } =
+    selectedCalendarSelectSchema.parse(req.query);
+
+  const calendarCacheRepository = await CalendarCache.initFromDwdOrRegularCredential({
+    credentialId,
+    dwdId: domainWideDelegationCredentialId,
+    userId: user.id,
+  });
+
   await calendarCacheRepository.unwatchCalendar({
     calendarId: externalId,
     eventTypeIds: [eventTypeId ?? null],
@@ -85,7 +93,7 @@ async function getHandler(req: CustomNextApiRequest) {
     select: { externalId: true },
   });
   // get user's credentials + their connected integrations
-  const calendarCredentials = getCalendarCredentials(user.credentials);
+  const calendarCredentials = await getCalendarCredentials(user.credentials);
   // get all the connected integrations' calendars (from third party)
   const { connectedCalendars } = await getConnectedCalendars(
     calendarCredentials,
