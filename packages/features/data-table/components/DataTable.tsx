@@ -27,6 +27,7 @@ export type DataTableProps<TData, TValue> = {
   children?: React.ReactNode;
   identifier?: string;
   enableColumnResizing?: boolean;
+  hideHeader?: boolean;
 };
 
 export function DataTable<TData, TValue>({
@@ -39,6 +40,7 @@ export function DataTable<TData, TValue>({
   children,
   identifier: _identifier,
   enableColumnResizing,
+  hideHeader,
   ...rest
 }: DataTableProps<TData, TValue> & React.ComponentPropsWithoutRef<"div">) {
   const pathname = usePathname() as string | null;
@@ -104,60 +106,62 @@ export function DataTable<TData, TValue>({
             ...columnSizingVars,
             ...(Boolean(enableColumnResizing) && { width: table.getTotalSize() }),
           }}>
-          <TableHeader className="sticky top-0 z-10">
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id} className="hover:bg-subtle flex w-full">
-                {headerGroup.headers.map((header) => {
-                  const meta = header.column.columnDef.meta;
-                  return (
-                    <TableHead
-                      key={header.id}
-                      style={{
-                        ...(meta?.sticky?.position === "left" && { left: `${meta.sticky.gap || 0}px` }),
-                        ...(meta?.sticky?.position === "right" && { right: `${meta.sticky.gap || 0}px` }),
-                        width: `var(--header-${kebabCase(header?.id)}-size)`,
-                      }}
-                      className={classNames(
-                        "relative flex shrink-0 items-center",
-                        header.column.getCanSort()
-                          ? "bg-subtle hover:bg-muted cursor-pointer select-none"
-                          : "",
-                        meta?.sticky && "top-0 z-20 sm:sticky"
-                      )}>
-                      <div
-                        className="flex h-full w-full items-center overflow-hidden"
-                        onClick={header.column.getToggleSortingHandler()}>
-                        {header.isPlaceholder
-                          ? null
-                          : flexRender(header.column.columnDef.header, header.getContext())}
-                        {header.column.getIsSorted() && (
-                          <Icon
-                            name="arrow-up"
-                            className="ml-2 h-4 w-4"
-                            style={{
-                              transform:
-                                header.column.getIsSorted() === "asc" ? "rotate(0deg)" : "rotate(180deg)",
-                              transition: "transform 0.2s ease-in-out",
-                            }}
+          {!hideHeader && (
+            <TableHeader className="sticky top-0 z-10">
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id} className="hover:bg-subtle flex w-full">
+                  {headerGroup.headers.map((header) => {
+                    const meta = header.column.columnDef.meta;
+                    return (
+                      <TableHead
+                        key={header.id}
+                        style={{
+                          ...(meta?.sticky?.position === "left" && { left: `${meta.sticky.gap || 0}px` }),
+                          ...(meta?.sticky?.position === "right" && { right: `${meta.sticky.gap || 0}px` }),
+                          width: `var(--header-${kebabCase(header?.id)}-size)`,
+                        }}
+                        className={classNames(
+                          "relative flex shrink-0 items-center",
+                          header.column.getCanSort()
+                            ? "bg-subtle hover:bg-muted cursor-pointer select-none"
+                            : "",
+                          meta?.sticky && "top-0 z-20 sm:sticky"
+                        )}>
+                        <div
+                          className="flex h-full w-full items-center overflow-hidden"
+                          onClick={header.column.getToggleSortingHandler()}>
+                          {header.isPlaceholder
+                            ? null
+                            : flexRender(header.column.columnDef.header, header.getContext())}
+                          {header.column.getIsSorted() && (
+                            <Icon
+                              name="arrow-up"
+                              className="ml-2 h-4 w-4"
+                              style={{
+                                transform:
+                                  header.column.getIsSorted() === "asc" ? "rotate(0deg)" : "rotate(180deg)",
+                                transition: "transform 0.2s ease-in-out",
+                              }}
+                            />
+                          )}
+                        </div>
+                        {Boolean(enableColumnResizing) && header.column.getCanResize() && (
+                          <div
+                            onMouseDown={header.getResizeHandler()}
+                            onTouchStart={header.getResizeHandler()}
+                            className={classNames(
+                              "bg-inverted absolute right-0 top-0 h-full w-[5px] cursor-col-resize touch-none select-none opacity-0 hover:opacity-50",
+                              header.column.getIsResizing() && "!opacity-75"
+                            )}
                           />
                         )}
-                      </div>
-                      {Boolean(enableColumnResizing) && header.column.getCanResize() && (
-                        <div
-                          onMouseDown={header.getResizeHandler()}
-                          onTouchStart={header.getResizeHandler()}
-                          className={classNames(
-                            "bg-inverted absolute right-0 top-0 h-full w-[5px] cursor-col-resize touch-none select-none opacity-0 hover:opacity-50",
-                            header.column.getIsResizing() && "!opacity-75"
-                          )}
-                        />
-                      )}
-                    </TableHead>
-                  );
-                })}
-              </TableRow>
-            ))}
-          </TableHeader>
+                      </TableHead>
+                    );
+                  })}
+                </TableRow>
+              ))}
+            </TableHeader>
+          )}
           {/* When resizing any column we will render this special memoized version of our table body */}
           {table.getState().columnSizingInfo.isResizingColumn ? (
             <MemoizedTableBody
