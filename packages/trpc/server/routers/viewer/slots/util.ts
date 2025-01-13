@@ -24,7 +24,8 @@ import { isRerouting, shouldIgnoreContactOwner } from "@calcom/lib/bookings/rout
 import { RESERVED_SUBDOMAINS } from "@calcom/lib/constants";
 import { getUTCOffsetByTimezone } from "@calcom/lib/date-fns";
 import { getDefaultEvent } from "@calcom/lib/defaultEvents";
-import { getAllDwdCalendarCredentialsForUser } from "@calcom/lib/domainWideDelegation/server";
+import { getAllDwdCalendarCredentialsForUsers } from "@calcom/lib/domainWideDelegation/server";
+import getOrgIdFromMemberOrTeamId from "@calcom/lib/getOrgIdFromMemberOrTeamId";
 import {
   calculatePeriodLimits,
   isTimeOutOfBounds,
@@ -260,29 +261,29 @@ export function getUsersWithCredentialsConsideringContactOwner({
 async function getEnrichedUsersWithCredentialsConsideringContactOwner({
   contactOwnerEmail,
   hosts,
+  orgId,
 }: {
   contactOwnerEmail: string | null | undefined;
   hosts: {
     isFixed?: boolean;
     user: GetAvailabilityUser;
   }[];
+  orgId: number | null;
 }) {
   const hostsWithContactOwner = getUsersWithCredentialsConsideringContactOwner({
     contactOwnerEmail,
     hosts,
   });
 
-  const hostsWithDwdCredentials = await Promise.all(
-    hostsWithContactOwner.map(async (host) => {
-      const dwdCredentials = await getAllDwdCalendarCredentialsForUser({
-        user: host,
-      });
-      return {
-        ...host,
-        credentials: [...host.credentials, ...dwdCredentials],
-      };
-    })
-  );
+  const dwdCredentialsMap = await getAllDwdCalendarCredentialsForUsers({
+    organizationId: orgId,
+    users: hostsWithContactOwner,
+  });
+
+  const hostsWithDwdCredentials = hostsWithContactOwner.map((host) => ({
+    ...host,
+    credentials: [...host.credentials, ...(dwdCredentialsMap.get(host.id) ?? [])],
+  }));
   return hostsWithDwdCredentials;
 }
 
@@ -360,6 +361,12 @@ async function _getAvailableSlots({ input, ctx }: GetScheduleOptions): Promise<I
     eventType,
     !!input.rescheduleUid
   );
+
+  const orgId = await getOrgIdFromMemberOrTeamId({
+    memberId: eventHosts[0].user.id,
+    teamId: eventType?.team?.id,
+  });
+
   const hostsAfterSegmentMatching = await findMatchingHostsWithEventSegment({
     eventType,
     normalizedHosts: eventHosts,
@@ -391,6 +398,7 @@ async function _getAvailableSlots({ input, ctx }: GetScheduleOptions): Promise<I
       endTime,
       bypassBusyCalendarTimes,
       shouldServeCache,
+      orgId,
     });
 
   // If contact skipping, determine if there's availability within two weeks
@@ -416,6 +424,7 @@ async function _getAvailableSlots({ input, ctx }: GetScheduleOptions): Promise<I
             endTime,
             bypassBusyCalendarTimes,
             shouldServeCache,
+            orgId,
           }));
       }
     }
@@ -902,6 +911,7 @@ const calculateHostsAndAvailabilities = async ({
   endTime,
   bypassBusyCalendarTimes,
   shouldServeCache,
+  orgId,
 }: {
   input: TGetScheduleInputSchema;
   eventType: Exclude<Awaited<ReturnType<typeof getRegularOrDynamicEventType>>, null>;
@@ -915,6 +925,7 @@ const calculateHostsAndAvailabilities = async ({
   endTime: Dayjs;
   bypassBusyCalendarTimes: boolean;
   shouldServeCache?: boolean;
+  orgId: number | null;
 }) => {
   const routedTeamMemberIds = input.routedTeamMemberIds ?? null;
   if (
@@ -944,6 +955,7 @@ const calculateHostsAndAvailabilities = async ({
     {
       contactOwnerEmail,
       hosts,
+      orgId,
     }
   );
 
